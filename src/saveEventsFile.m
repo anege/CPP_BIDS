@@ -1,6 +1,6 @@
 % (C) Copyright 2020 CPP_BIDS developers
 
-function [logFile] = saveEventsFile(action, cfg, logFile)
+function logFile = saveEventsFile(action, cfg, logFile)
     %
     % Function to save output files for events that will be BIDS compliant.
     %
@@ -8,68 +8,73 @@ function [logFile] = saveEventsFile(action, cfg, logFile)
     %
     %   [logFile] = saveEventsFile(action, cfg, logFile)
     %
-    %   logFile] = saveEventsFile('init', [cfg], logFile)
-    %   logFile] = saveEventsFile('open', [cfg], logFile)
-    %   logFile] = saveEventsFile('open_stim', [cfg], logFile)
-    %   logFile] = saveEventsFile('save', [cfg], logFile)
-    %   logFile] = saveEventsFile('close', cfg, logFile)
+    % :param action: Defines the operation to do. The different possibilities are
+    %                ``'init'``, ``'open'``, ``'open_stim'``, ``'save'`` or ``'close'``.
+    %                For more information on each case see below.
+    % :type action: string
+    % :param cfg: Configuration variable. See ``checkCFG()``.
+    % :type cfg: structure
+    % :param logFile: (n x 1) The ``logFile`` variable that contains the n events
+    %                 you want to save must be a nx1 structure.
+    % :type logFile: structure
     %
-    % INPUTS
+    % .. todo:
+    %    - more details about how to structure the logFile variable
     %
-    % logFile:
+    % See ``tests/test_saveEventsFile()`` for more details on how to use it.
     %
-    % When you want to save your data ``logFile`` contains the data you want to save.
-    % The ``logFile`` variable that contains the n events you want to save must be a nx1 structure.
-    % Each field will be saved in a separate column.
-    %
-    % example::
+    % Example::
     %
     %   logFile(1,1).onset = 2;
     %   logFile(1,1).trial_type = 'motion_up';
     %   logFile(1,1).duration = 1;
-    %   logFile(1,1).speed = 2;
-    %   logFile(1,1).is_fixation = true;
     %
-    %   logFile(2,1).onset = 3;
-    %   logFile(2,1).trial_type = 'static';
-    %   logFile(2,1).duration = 4;
-    %   logFile(2,1).is_fixation = 3;
+    % Actions:
+    %
+    %   .. todo:
+    %      wait for updates on the API of this function to finish updating
+    %
+    %   Example::
+    %
+    %     logFile = saveEventsFile('init', [cfg], logFile)
+    %     logFile = saveEventsFile('open', [cfg], logFile)
+    %     logFile = saveEventsFile('open_stim', [cfg], logFile)
+    %     logFile = saveEventsFile('save', [cfg], logFile)
+    %
+    %   - ``'open'`` will create the file ID and return it in ``logFile.fileID`` using
+    %     the information in the ``cfg`` structure.
+    %     This file ID is then reused when calling that function to save data into this file.
+    %     This creates the header with the obligatory ``'onset'``, ``'duration'`` required
+    %     by BIDS and other columns can be specified in varargin.
+    %
+    %     Example::
+    %
+    %       logFile = saveEventsFile('open', cfg, logFile);
+    %
+    %   - ``'save'`` will save the data contained in logfile by using the file ID
+    %     ``logFile.fileID``; logfile must then contain:
+    %
+    %     - logFile.onset
+    %     - logFile.trial_type
+    %     - logFile.duration
+    %
+    %     Example::
+    %
+    %       logFile = saveEventsFile('open', cfg, logFile);
+    %
+    %   - ``'close'`` closes the file with file ID ``logFile.fileID``.
+    %     If ``cfg.verbose`` is superior to ``1`` then this will tell you
+    %     where the file is located.
+    %
+    %     Example::
+    %
+    %       logFile = saveEventsFile('close', cfg, logFile)
     %
     %
-    % action:
-    %
-    % - ``'open'`` will create the file ID and return it in ``logFile.fileID`` using
-    %   the information in the ``cfg`` structure.
-    %   This file ID is then reused when calling that function to save data into this file.
-    %   This creates the header with the obligatory ``'onset'``, ``'duration'`` required
-    %   by BIDS and other columns can be specified in varargin.
-    %
-    % example::
-    %
-    %   logFile = saveEventsFile('open', cfg, [], 'direction', 'speed', 'target');
-    %
-    %
-    % - ``'save'`` will save the data contained in logfile by using the file ID ``logFile.fileID``;
-    %   logfile must then contain:
-    %
-    %                           - logFile.onset
-    %                           - logFile.trial_type
-    %                           - logFile.duration
-    %
-    % The name of any extra column whose content must be saved should be listed in varargin.
-    %
-    % - ``'close'`` closes the file with file ID ``logFile.fileID``. If ``cfg.verbose`` is set
-    %   to true then this will tell you where the file is located.
-    %
-    % See ``tests/test_saveEventsFile()`` for more details on how to use it.
-    %
-
-    if nargin < 1
-        error('Missing action input');
-    end
 
     if nargin < 2
-        cfg = struct();
+        error(['Missing arguments. Please specify <action input> ', ...
+               'and <cfg file> as the first two arguments']);
     end
 
     if nargin < 3 || isempty(logFile)
@@ -80,19 +85,35 @@ function [logFile] = saveEventsFile(action, cfg, logFile)
 
         case 'init'
 
-            logFile = initializeExtraColumns(logFile);
+            % flag to indicate that this will be an _events file
+            logFile(1).isStim = false;
+
+            if isfield(cfg, 'fileName') && ...
+                                        isfield(cfg.fileName, 'events') && ...
+                                        ~isempty(cfg.fileName.events)
+                logFile(1).filename = cfg.fileName.events;
+            else
+                logFile(1).filename = '';
+            end
+            logFile = initializeFile(logFile);
+
+        case 'init_stim'
+
+            % flag to indicate that this will be an _stim file
+            logFile(1).isStim = true;
+
+            if isfield(cfg, 'fileName') && ...
+                                        isfield(cfg.fileName, 'stim') && ...
+                                        ~isempty(cfg.fileName.stim)
+                logFile(1).filename = cfg.fileName.stim;
+            else
+                logFile(1).filename = '';
+            end
+            logFile = initializeStimFile(logFile);
 
         case 'open'
 
-            logFile(1).filename = cfg.fileName.events;
-
-            logFile = initializeFile(cfg, logFile);
-
-        case 'open_stim'
-
-            logFile(1).filename = cfg.fileName.stim;
-
-            logFile = initializeStimFile(cfg, logFile);
+            logFile = openFile(cfg, logFile);
 
         case 'save'
 
@@ -155,30 +176,44 @@ function logFile = checklLogFile(action, logFile, iEvent, cfg)
 
 end
 
-function logFile = initializeFile(cfg, logFile)
+function logFile = initializeFile(logFile)
+    % This function creates the bids field structure for json files for the
+    % three basic bids event columns, and for all requested extra columns.
+    %
+    % Note that subfields (e.g. unit, levels etc. can be changed by the user
+    % before calling openFile.
 
-    logFile = initializeStimFile(cfg, logFile);
+    % initialize holy trinity (onset, trial_type, duration) columns
+    logFile(1).columns = struct( ...
+                                'onset', struct( ...
+                                                'Description', ...
+                                                'time elapsed since experiment start', ...
+                                                'Units', 's'), ...
+                                'trial_type', struct( ...
+                                                     'Description', 'types of trial', ...
+                                                     'Levels', ''), ...
+                                'duration', struct( ...
+                                                   'Description', ...
+                                                   'duration of the event or the block', ...
+                                                   'Units', 's') ...
+                               );
 
-    % print the basic BIDS columns
-    fprintf(logFile(1).fileID, '%s\t%s\t%s', 'onset', 'duration', 'trial_type');
-    fprintf(1, '%s\t%s\t%s', 'onset', 'duration', 'trial_type');
-
-    printHeaderExtraColumns(logFile);
-
-    % next line so we start printing at the right place
-    fprintf(logFile(1).fileID, '\n');
-    fprintf(1, '\n');
+    logFile = initializeExtraColumns(logFile);
 
 end
 
-function logFile = initializeStimFile(cfg, logFile)
+function logFile = initializeStimFile(logFile)
 
     logFile = initializeExtraColumns(logFile);
+
+end
+
+function logFile = openFile(cfg, logFile)
 
     createDataDictionary(cfg, logFile);
 
     % Initialize txt logfiles and empty fields for the standard BIDS
-    %  event file
+    % event file
     logFile(1).fileID = fopen( ...
                               fullfile( ...
                                        cfg.dir.outputSubject, ...
@@ -186,12 +221,28 @@ function logFile = initializeStimFile(cfg, logFile)
                                        logFile.filename), ...
                               'w');
 
+    if ~logFile(1).isStim
+        % print the basic BIDS columns
+        fprintf(logFile(1).fileID, '%s\t%s\t%s', 'onset', 'duration', 'trial_type');
+        fprintf(1, '%s\t%s\t%s', 'onset', 'duration', 'trial_type');
+
+        printHeaderExtraColumns(logFile);
+
+        % next line so we start printing at the right place
+        fprintf(logFile(1).fileID, '\n');
+        fprintf(1, '\n');
+
+    elseif logFile(1).isStim
+        % don't print column headers for _stim.tsv
+
+    end
+
 end
 
 function printHeaderExtraColumns(logFile)
     % print any extra column specified by the user
 
-    [namesExtraColumns, logFile] = returnNamesExtraColumns(logFile);
+    [namesExtraColumns] = returnNamesExtraColumns(logFile);
 
     for iExtraColumn = 1:numel(namesExtraColumns)
 
@@ -299,25 +350,71 @@ function logFile = saveToLogFile(logFile, cfg)
 
         logFile = checklLogFile('fields', logFile, iEvent, cfg);
 
-        onset = logFile(iEvent).onset;
-        duration = logFile(iEvent).duration;
-        trial_type = logFile(iEvent).trial_type;
+        % check if this event should be skipped
+        skipEvent = false;
 
-        % we skip events with onset or duration that are empty, nan or char
-        if any(cell2mat(cellfun(@isnan, {onset duration}, 'UniformOutput', false))) || ...
-                any(cellfun(@ischar, {onset duration})) || ...
-                any(isempty({onset duration}))
+        % if this is _events file, we skip events with onset or duration
+        % that are empty, nan or char.
+        if ~logFile(1).isStim
 
-            warning('saveEventsFile:emptyEvent', ...
-                    '\nSkipping saving this event.\n onset: %s \n duration: %s\n', ...
-                    onset, ...
-                    duration);
+            onset = logFile(iEvent).onset;
+            duration = logFile(iEvent).duration;
+            trial_type = logFile(iEvent).trial_type;
+
+            if any(cell2mat(cellfun(@isnan, {onset duration}, 'UniformOutput', false))) || ...
+               any(cellfun(@ischar, {onset duration})) || ...
+               any(isempty({onset duration}))
+
+                skipEvent = true;
+
+                warningMessageID = 'saveEventsFile:emptyEvent';
+                warningMessage = sprintf(['Skipping saving this event. \n '...
+                                          'onset: %s \n duration: %s \n'], ...
+                                         onset, ...
+                                         duration);
+            end
+
+            % if this is _stim file, we skip missing events (i.e. events where
+            % all extra columns have NO values)
+        elseif logFile(1).isStim
+
+            namesExtraColumns = returnNamesExtraColumns(logFile);
+            isValid = ones(1, numel(namesExtraColumns));
+            for iExtraColumn = 1:numel(namesExtraColumns)
+                data = logFile(iEvent).(namesExtraColumns{iExtraColumn});
+                if isempty(data) || all(isnan(data)) || (ischar(data) && strcmp(data, 'n/a'))
+                    isValid(iExtraColumn) = 0;
+                end
+            end
+            if all(~isValid)
+                skipEvent = true;
+
+                warningMessageID = 'saveEventsFile:emptyEvent';
+                warningMessage = sprintf(['Skipping saving this event. \n', ...
+                                          'No values defined. \n']);
+            elseif any(~isValid)
+                skipEvent = false;
+
+                warningMessageID = 'saveEventsFile:missingData';
+                warningMessage = sprintf('Missing some %s data for this event. \n', ...
+                                         namesExtraColumns{find(isValid)});
+            end
+        end
+
+        % now save the event to log file (if not skipping)
+        if skipEvent
+
+            warning(warningMessageID, warningMessage);
 
         else
 
-            printData(logFile(1).fileID, onset, cfg);
-            printData(logFile(1).fileID, duration, cfg);
-            printData(logFile(1).fileID, trial_type, cfg);
+            if ~logFile(1).isStim
+
+                printData(logFile(1).fileID, onset, cfg);
+                printData(logFile(1).fileID, duration, cfg);
+                printData(logFile(1).fileID, trial_type, cfg);
+
+            end
 
             printExtraColumns(logFile, iEvent, cfg);
 
@@ -325,6 +422,7 @@ function logFile = saveToLogFile(logFile, cfg)
             fprintf(1, '\n');
 
         end
+
     end
 
 end
@@ -375,6 +473,9 @@ function logFile = resetLogFileVar(logFile)
     logFile(2:end) = [];
 
     namesColumns = {'onset', 'duration', 'trial_type'};
+    if logFile(1).isStim
+        namesColumns = {};
+    end
     namesExtraColumns = returnNamesExtraColumns(logFile);
     namesColumns = cat(2, namesColumns, namesExtraColumns');
 
